@@ -1,0 +1,7 @@
+.DS_Store
+_test/
+*.mp4
+*.m4a
+*.wav
+*.mp3
+node_modules/
