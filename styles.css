@@ -105,7 +105,12 @@ kbd {
 .play .i-pause, .play.playing .i-play { display: none; }
 .play.playing .i-pause { display: block; }
 .time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 40px; }
-#seek { flex: 1; }
+.seek-wrap { position: relative; flex: 1; display: flex; align-items: center; }
+.seek-wrap #seek { width: 100%; position: relative; z-index: 1; }
+.range-mark {
+  position: absolute; top: 50%; height: 9px; transform: translateY(-50%); border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 35%, transparent); border: 1px solid var(--accent); pointer-events: none;
+}
 
 /* ---------- Range ---------- */
 input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 18px; margin: 0; }
@@ -198,6 +203,41 @@ textarea { resize: vertical; font: 12px/1.5 ui-monospace, Menlo, monospace; min-
 .image-row small { color: var(--muted); }
 .note { margin: 0; color: var(--muted); font-size: 12px; }
 .note.error { color: #ff7b7b; }
+
+/* ---------- Schede e controlli generati ---------- */
+.tabs {
+  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; margin: 0 -18px; padding: 8px 18px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  flex: 1; padding: 7px 4px; border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  cursor: pointer; font-weight: 500;
+}
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { background: var(--bg-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+.panel-body[data-active="look"] > .group:not([data-tab="look"]),
+.panel-body[data-active="scene"] > .group:not([data-tab="scene"]),
+.panel-body[data-active="text"] > .group:not([data-tab="text"]),
+.panel-body[data-active="export"] > .group:not([data-tab="export"]) { display: none; }
+.ctl { display: grid; gap: 6px; }
+.ctl-label { color: var(--muted); font-size: 11.5px; }
+.ctl .seg button { font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips:empty { display: none; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--bg-2); cursor: pointer; font-size: 12px;
+}
+.chip:hover { border-color: var(--accent); }
+.chip.user { border-style: dashed; }
+.chip button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 14px; line-height: 1;
+}
+.chip button:hover { color: #ff7b7b; }
+.range-edit { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: end; }
+.range-edit input { font-variant-numeric: tabular-nums; }
+.field select optgroup { color: var(--muted); }
+.track { padding-top: 12px; }
 
 /* ---------- Overlays ---------- */
 .drag-veil {

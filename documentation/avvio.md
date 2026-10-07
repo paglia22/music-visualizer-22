@@ -42,6 +42,9 @@ Installa gli strumenti da riga di comando di Apple (`xcode-select --install`) op
 **"Non riesco a leggere questo file audio"**
 Il formato non è decodificabile dal browser. Converti in MP3 o WAV e riprova.
 
+**Il font scelto non si vede**
+I font del gruppo *Google Fonts* si scaricano da internet: senza connessione viene usato un font di riserva. Usa un font di sistema, oppure carica il file del font con *Carica un font…*.
+
 **L'anteprima scatta**
 Togli la spunta da *Anteprima a piena risoluzione*: l'anteprima è solo una visualizzazione e il video esportato non ne risente.
 
@@ -51,4 +54,4 @@ Tieni la scheda in primo piano durante l'esportazione: i browser rallentano le s
 ## Dove vengono salvati i dati
 
 - **Video**: in Chrome scegli tu dove salvarlo, e il file viene scritto direttamente su disco. Negli altri browser parte un download normale.
-- **Impostazioni** (stile, colori, dinamica…) e **testi sincronizzati**: nel `localStorage` del browser. I testi sono salvati per ogni brano, in base al nome del file. Cancellando i dati del sito su `localhost:8765` si azzerano.
+- **Impostazioni** (stile, colori, dinamica…), **look salvati** e **testi sincronizzati**: nel `localStorage` del browser. Per conservare un look al sicuro o portarlo su un altro computer, usa *Esporta* nella sezione Look. I testi sono salvati per ogni brano, in base al nome del file. Cancellando i dati del sito su `localhost:8765` si azzerano.

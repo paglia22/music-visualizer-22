@@ -4,6 +4,16 @@ Crea video musicali minimal che seguono il ritmo del brano: carichi l'audio, sce
 
 Funziona interamente nel browser, in locale. L'audio non viene caricato su nessun server.
 
+**Cosa puoi fare**
+- 3 stili (Orbita, Orizzonte, Onda) con forma, densità, spessore, rotazione e simmetria regolabili
+- 4 formati (16:9, 9:16, 4:5, 1:1) da 720p a 4K, a 30 o 60 fps
+- 8 palette, colori liberi, variazione di tinta nel tempo, sfondo sfumato o con immagine
+- Effetti legati al ritmo: bagliore, colpo di camera, lampi, vibrazione, particelle, grana
+- Titolo, artista, logo, copertina, font di sistema, Google Fonts o font tuoi
+- Testo della canzone sincronizzato a mano, con 4 animazioni (anche karaoke)
+- Esportazione di un estratto (per Reels e TikTok) con dissolvenze
+- Look salvabili ed esportabili in `.json`, per usare lo stesso stile su più brani
+
 ## Avvio rapido
 
 **Requisiti:** macOS, Python 3 (già presente se `python3 --version` risponde) e Google Chrome.

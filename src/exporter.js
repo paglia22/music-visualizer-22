@@ -1,7 +1,8 @@
 import { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } from '../vendor/mp4-muxer.mjs';
-import { Renderer } from './renderer.js';
+import { Renderer, playRange } from './renderer.js';
 
-const VIDEO_CODECS = ['avc1.640033', 'avc1.4d0033', 'avc1.640028', 'avc1.42e033'];
+// Dal più capace al più compatibile: High 5.2 (4K60) → High 5.1 → Main → Baseline.
+const VIDEO_CODECS = ['avc1.640034', 'avc1.640033', 'avc1.4d0033', 'avc1.640028', 'avc1.42e033'];
 
 export function exportSupport() {
   const missing = ['VideoEncoder', 'AudioEncoder', 'VideoFrame', 'AudioData'].filter((k) => !(k in window));
@@ -11,7 +12,8 @@ export function exportSupport() {
 export function bitrateFor(w, h, fps, quality) {
   const px = (w * h) / (1920 * 1080);
   const base = quality === 'high' ? 14e6 : 8e6;
-  return Math.round(base * px * (fps >= 50 ? 1 : 0.65));
+  // Crescita meno che lineare con i pixel: il 4K non ha bisogno di 4× i bit del 1080p.
+  return Math.round(base * Math.pow(px, 0.85) * (fps >= 50 ? 1 : 0.65));
 }
 
 async function pickVideoConfig(w, h, fps, bitrate) {
@@ -24,7 +26,7 @@ async function pickVideoConfig(w, h, fps, bitrate) {
       } catch { /* prova il successivo */ }
     }
   }
-  throw new Error('Il browser non supporta la codifica H.264 a questa risoluzione.');
+  throw new Error(`Il browser non supporta la codifica H.264 a ${w}×${h} ${fps} fps. Prova una risoluzione più bassa o 30 fps.`);
 }
 
 async function pickAudioConfig(sampleRate, numberOfChannels) {
@@ -52,15 +54,26 @@ export function askSaveLocation(suggestedName) {
 /**
  * Esporta il video. opts: { audioBuffer, analysis, envelopes, settings, lyrics, images,
  *   width, height, fps, quality, fileHandle, onProgress, signal }
+ * Se settings.rangeEnabled, esporta solo l'estratto [rangeStart, rangeEnd].
  * Ritorna { blob } (download classico) oppure { savedTo } (salvato su disco).
  */
 export async function exportVideo(opts) {
   const { audioBuffer, analysis: A, envelopes: E, settings: S, lyrics, images, width, height, fps, quality, fileHandle, onProgress, signal } = opts;
-  const duration = audioBuffer.duration;
+  const [rangeStart, rangeEnd] = playRange(A, S);
+  const duration = rangeEnd - rangeStart;
   const totalFrames = Math.ceil(duration * fps);
   const bitrate = bitrateFor(width, height, fps, quality);
   const sampleRate = audioBuffer.sampleRate;
   const channels = Math.min(2, audioBuffer.numberOfChannels);
+
+  // I font web devono essere pronti prima di disegnare il testo sul canvas.
+  if (document.fonts) {
+    await Promise.all([
+      document.fonts.load(`600 40px "${S.font}"`),
+      document.fonts.load(`${S.lyricsWeight} 40px "${S.font}"`),
+      document.fonts.load(`500 40px "${S.font}"`),
+    ]).catch(() => {});
+  }
 
   const videoCfg = await pickVideoConfig(width, height, fps, bitrate);
   const audio = await pickAudioConfig(sampleRate, channels);
@@ -102,17 +115,32 @@ export async function exportVideo(opts) {
   const renderer = new Renderer();
   renderer.setImages(images);
 
-  // Audio in blocchi, intercalato con il video.
+  // Audio dell'estratto, in blocchi intercalati con il video, con dissolvenze ai bordi.
   const chData = [];
   for (let c = 0; c < channels; c++) chData.push(audioBuffer.getChannelData(c));
+  const firstSample = Math.round(rangeStart * sampleRate);
+  const totalSamples = Math.min(audioBuffer.length - firstSample, Math.round(duration * sampleRate));
+  // Anche senza dissolvenza, 10 ms evitano il "click" di un taglio a metà brano.
+  const fadeInS = Math.max(S.rangeEnabled && rangeStart > 0 ? 0.01 : 0, S.fadeIn) * sampleRate;
+  const fadeOutS = Math.max(S.rangeEnabled && rangeEnd < A.duration ? 0.01 : 0, S.fadeOut) * sampleRate;
+  const gainAt = (n) => {
+    let g = 1;
+    if (fadeInS > 0 && n < fadeInS) g = Math.min(g, n / fadeInS);
+    if (fadeOutS > 0 && totalSamples - n < fadeOutS) g = Math.min(g, (totalSamples - n) / fadeOutS);
+    return g * g;
+  };
   const AUDIO_BLOCK = 4096;
   let audioPos = 0;
   const encodeAudioUntil = (sampleEnd) => {
-    sampleEnd = Math.min(sampleEnd, audioBuffer.length);
+    sampleEnd = Math.min(sampleEnd, totalSamples);
     while (audioPos < sampleEnd) {
-      const n = Math.min(AUDIO_BLOCK, audioBuffer.length - audioPos);
+      const n = Math.min(AUDIO_BLOCK, totalSamples - audioPos);
       const planar = new Float32Array(n * channels);
-      for (let c = 0; c < channels; c++) planar.set(chData[c].subarray(audioPos, audioPos + n), c * n);
+      for (let c = 0; c < channels; c++) {
+        const src = chData[c];
+        const o = c * n;
+        for (let s = 0; s < n; s++) planar[o + s] = src[firstSample + audioPos + s] * gainAt(audioPos + s);
+      }
       const data = new AudioData({
         format: 'f32-planar', sampleRate, numberOfFrames: n, numberOfChannels: channels,
         timestamp: Math.round((audioPos / sampleRate) * 1e6), data: planar,
@@ -130,7 +158,7 @@ export async function exportVideo(opts) {
       if (signal?.aborted) throw new DOMException('Esportazione annullata', 'AbortError');
       if (failure) throw failure;
       const t = f / fps;
-      renderer.render(ctx, width, height, t, A, E, S, lyrics);
+      renderer.render(ctx, width, height, rangeStart + t, A, E, S, lyrics);
       const frame = new VideoFrame(canvas, { timestamp: Math.round(t * 1e6), duration: frameDur });
       videoEncoder.encode(frame, { keyFrame: f % (fps * 2) === 0 });
       frame.close();
@@ -146,7 +174,7 @@ export async function exportVideo(opts) {
         await new Promise((r) => setTimeout(r, 0));
       }
     }
-    encodeAudioUntil(audioBuffer.length);
+    encodeAudioUntil(totalSamples);
     onProgress?.({ frame: totalFrames, totalFrames, done: 1, eta: 0, finalizing: true, canvas });
     await videoEncoder.flush();
     await audioEncoder.flush();

@@ -312,18 +312,6 @@ export async function analyzeAudio(audioBuffer, onProgress = () => {}) {
     return o;
   };
   const lowN = norm(lowFlux), hiN = norm(hiFlux), fullN = norm(fullFlux);
-  const peakOpts = { pre: 5, post: 5, avgPre: 24, avgPost: 6, wait: Math.round(0.11 * fps) };
-  // Il flusso è logaritmico (sente il ritmo anche nelle parti piano): la forza del colpo
-  // viene pesata col livello reale della banda, così i drop colpiscono più delle strofe.
-  const levelNear = (x, i) => Math.max(x[i], x[Math.min(nFrames - 1, i + 1)], x[Math.min(nFrames - 1, i + 3)]);
-  const kicks = pickPeaks(lowN, { ...peakOpts, delta: 0.32 })
-    .filter((i) => lowN[i] > 0.35)
-    .map((i) => ({ t: i / fps, s: clamp01(lowN[i] / 1.3) * (0.3 + 0.7 * levelNear(bands.bass, i)) }))
-    .filter((k) => k.s > 0.08);
-  const hits = pickPeaks(hiN, { ...peakOpts, delta: 0.3 })
-    .filter((i) => hiN[i] > 0.4)
-    .map((i) => ({ t: i / fps, s: clamp01(hiN[i] / 1.4) * (0.3 + 0.7 * levelNear(bands.high, i)) }))
-    .filter((k) => k.s > 0.08);
   onProgress(0.95);
   await yieldToUI();
 
@@ -338,7 +326,32 @@ export async function analyzeAudio(audioBuffer, onProgress = () => {}) {
     .map((i) => i / fps);
 
   onProgress(1);
-  return { fps, nFrames, duration, sampleRate: sr, mono, bars, bands, rms, rmsTop, kicks, hits, beats, bpm };
+  const A = { fps, nFrames, duration, sampleRate: sr, mono, bars, bands, rms, rmsTop, lowN, hiN, beats, bpm };
+  Object.assign(A, detectEvents(A, 0.5));
+  return A;
+}
+
+/**
+ * Colpi di cassa e accenti acuti. sensitivity 0..1: più alta = più colpi rilevati.
+ * Veloce: si può ricalcolare quando l'utente sposta lo slider.
+ */
+export function detectEvents(A, sensitivity = 0.5) {
+  const { fps, nFrames, lowN, hiN, bands } = A;
+  const lerp = (a, b) => a + (b - a) * sensitivity;
+  const peakOpts = { pre: 5, post: 5, avgPre: 24, avgPost: 6, wait: Math.round(lerp(0.15, 0.08) * fps) };
+  // Il flusso è logaritmico (sente il ritmo anche nelle parti piano): la forza del colpo
+  // viene pesata col livello reale della banda, così i drop colpiscono più delle strofe.
+  const levelNear = (x, i) => Math.max(x[i], x[Math.min(nFrames - 1, i + 1)], x[Math.min(nFrames - 1, i + 3)]);
+  const minS = lerp(0.14, 0.04);
+  const kicks = pickPeaks(lowN, { ...peakOpts, delta: lerp(0.55, 0.12) })
+    .filter((i) => lowN[i] > lerp(0.6, 0.15))
+    .map((i) => ({ t: i / fps, s: clamp01(lowN[i] / 1.3) * (0.3 + 0.7 * levelNear(bands.bass, i)) }))
+    .filter((k) => k.s > minS);
+  const hits = pickPeaks(hiN, { ...peakOpts, delta: lerp(0.5, 0.12) })
+    .filter((i) => hiN[i] > lerp(0.65, 0.2))
+    .map((i) => ({ t: i / fps, s: clamp01(hiN[i] / 1.4) * (0.3 + 0.7 * levelNear(bands.high, i)) }))
+    .filter((k) => k.s > minS);
+  return { kicks, hits };
 }
 
 /**
